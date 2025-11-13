@@ -1,2 +1,21 @@
-# CE1110_PG2
-El presente repositorio tiene como objetivo principal mantener un control de versiones para el Proyecto Grupal #2 del curso de Análisis de Señales Mixtas (CE1110) del Instituto Tecnológico de Costa Rica
+# Instituto Tecnológico de Costa Rica
+
+## Proyecto Grupal 2
+
+### Diseño de un sistema de control: Control de velocidad de puerta corrediza
+
+#### Análisis de Señales Mixtas (CE1110)
+
+---
+
+### Estudiantes
+
+- José Bernardo Barquero Bonilla (2023150476)
+- Jimmy Feng Feng (2023060347)
+- Alexander Montero Vargas (2023166058)
+
+### Profesor
+
+- Luis Alberto Chavarría Zamora <lachavarria@itcr.ac.cr>
+
+---
