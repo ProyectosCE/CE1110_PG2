@@ -21,6 +21,23 @@
 \usepackage{algorithm}
 \usepackage{algorithmic}
 
+\usepackage{listings}
+\usepackage{xcolor}
+
+\lstset{
+	language=C,
+	basicstyle=\ttfamily\small,
+	keywordstyle=\color{blue},
+	commentstyle=\color{gray},
+	stringstyle=\color{orange},
+	numbers=left,
+	numberstyle=\tiny\color{gray},
+	stepnumber=1,
+	frame=single,
+	breaklines=true
+}
+
+
 %==========REFERENCIAS=============
 \usepackage[backend=bibtex,style=ieee,language=spanish]{biblatex}
 \addbibresource{referencias.bib}
@@ -359,6 +376,86 @@ Esta función de transferencia permite analizar la dinámica del motor DC sin co
 \end{equation}
 
 De los polos se pueden calcular la frecuencia natural y el factor de amortiguamiento, y con ello predecir la respuesta del motor ante un escalón de voltaje, así como la velocidad de régimen $\Omega_{max}$ que ya se obtuvo en (\ref{eq:velocidad_max}) \cite{zaccarian_dc_motors}.
+
+\newpage
+% ====== EXTRA ======
+
+\section{EXTRA: Caracterización del sistema mediante respuesta al escalón}
+
+Con el objetivo de caracterizar dinámicamente el motor DC, se obtuvo su respuesta al escalón a partir de su respuesta al impulso utilizando MATLAB.
+
+\subsection{Procedimiento para obtener la respuesta al escalón}
+
+Para obtener la respuesta al escalón se utilizó la respuesta al impulso del sistema, aprovechando que:
+
+\begin{equation}
+	y_{step}(t) = \int_{0}^{t} h(\tau)\, d\tau
+\end{equation}
+
+donde $h(t)$ es la respuesta al impulso y $y_{step}(t)$ es la respuesta al escalón.
+
+El siguiente pseudocódigo muestra el procedimiento general implementado:
+
+\begin{algorithm}[H]
+	\caption{Obtención de la respuesta al escalón a partir de la respuesta al impulso}
+	\begin{algorithmic}[1]
+		
+		\REQUIRE Modelo del sistema $G(s)$, tiempo de simulación $T_{sim}$, paso de simulación $\Delta t$
+		\ENSURE Respuesta al escalón $y_{step}(t)$
+		
+		\STATE Definir vector de tiempo: $t \gets 0:\Delta t:T_{sim}$
+		\STATE Calcular respuesta al impulso: $h(t) \gets impulse(G(s))$
+		
+		\STATE Inicializar $y_{step}(0) \gets 0$
+		
+		\FOR{$i = 2$ hasta longitud de $t$}
+		\STATE Integrar numéricamente:
+		\[
+		y_{step}(t_i) \gets y_{step}(t_{i-1}) + h(t_i)\cdot \Delta t
+		\]
+		\ENDFOR
+		
+		\STATE Convertir velocidad a RPM:
+		\[
+		y_{step,RPM}(t) \gets \frac{60}{2\pi} \; y_{step}(t)
+		\]
+		
+		\STATE Calcular parámetros dinámicos:
+		\begin{itemize}
+			\item Valor final $\omega_{ss}$
+			\item Tiempo de subida $t_r$
+			\item Tiempo de establecimiento $t_s$
+		\end{itemize}
+		
+		\RETURN $y_{step,RPM}(t)$, $\omega_{ss}$, $t_r$, $t_s$
+		
+	\end{algorithmic}
+\end{algorithm}
+
+\subsection{Resultados}
+
+A partir del procedimiento descrito anteriormente, se obtuvo la respuesta al escalón del motor DC utilizando la integración de la respuesta al impulso.
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=15cm]{Media/matlab_resultado.png}
+	\caption{Respuesta al escalón de la velocidad del motor DC obtenida a partir de la respuesta al impulso en MATLAB.}
+	\label{fig:resp_escalon}
+\end{figure}
+
+A partir de esta respuesta se determinaron los principales parámetros dinámicos del sistema:
+
+\begin{itemize}
+	\item Velocidad de estado estable: $\omega_{ss} = 158.62$ RPM
+	\item Tiempo de subida: $t_r = 0.176$ s
+	\item Tiempo de establecimiento: $t_s = 0.313$ s
+\end{itemize}
+
+En la figura \ref{fig:resp_escalon} se observa que el sistema no presenta sobreoscilaciones, lo que indica un comportamiento sobreamortiguado o críticamente amortiguado.
+
+Además, el tiempo de establecimiento es significativamente bajo, lo cual evidencia que el sistema responde rápidamente ante cambios de entrada, siendo adecuado para aplicaciones como el control de velocidad en una puerta corrediza automatizada.
+
+
 
 % ====== Referencias ======
 \newpage
