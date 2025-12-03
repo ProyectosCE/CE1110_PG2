@@ -1,138 +1,164 @@
-// MOTOR_CONTROL.ino
-// Plantilla de control de motor DC para Arduino (ej. UNO/Nano).
-// Controla dirección y velocidad con un puente H (L298N, TB6612FNG, etc.).
-// Comandos por Serial:
-//   F <0-255>    -> Adelante a velocidad (PWM)
-//   R <0-255>    -> Reversa a velocidad (PWM)
-//   S            -> Stop
-//   ?            -> Ayuda
-// Cableado típico L298N:
-//   IN1 -> DIR_A_PIN, IN2 -> DIR_B_PIN, ENA -> EN_PIN (PWM)
-// Ajuste los pines según su hardware.
+// This alternate version of the code does not require
+// atomic.h. Instead, interrupts() and noInterrupts() 
+// are used. Please use this code if your 
+// platform does not support ATOMIC_BLOCK.
 
-// --- Configuración de pines (ajuste según su placa) ---
-const uint8_t EN_PIN     = 9;   // Pin PWM para velocidad (UNO: 3,5,6,9,10,11)
-const uint8_t DIR_A_PIN  = 7;   // Dirección A
-const uint8_t DIR_B_PIN  = 8;   // Dirección B
+// Pins para Arduino UNO + TB6612FNG
+#define ENCA 2  // Pin de interrupción (2 o 3 en UNO)
+#define ENCB 4  // Pin digital cualquiera
+#define PWM 5   // Pin PWM (3,5,6,9,10,11 en UNO)
+#define IN1 6   // Pin PWM (3,5,6,9,10,11 en UNO) 
+#define IN2 7   // Pin digital
+#define STBY 8  // Pin digital
 
-// --- Parámetros Serial ---
-const unsigned long BAUDRATE = 9600;
+// globals
+long prevT = 0;
+int posPrev = 0;
+// Use the "volatile" directive for variables
+// used in an interrupt
+volatile int pos_i = 0;
+volatile float velocity_i = 0;
+volatile long prevT_i = 0;
 
-// --- Estado ---
-uint8_t currentSpeed = 0; // 0-255
+float v1Filt = 0;
+float v1Prev = 0;
+float v2Filt = 0;
+float v2Prev = 0;
+
+float eintegral = 0;
+// Variables para PID completo (agregando término derivativo)
+float ek = 0, ek1 = 0;  // Error actual y anterior para derivada
+float deltaT_pid = 0.01; // Tiempo fijo para PID discreto (como medium)
 
 void setup() {
-  // Inicializar Serial
-  Serial.begin(BAUDRATE);
-  while (!Serial) { /* Espera Serial (en placas con USB nativo) */ }
+  Serial.begin(115200);
 
-  // Inicializar pines
-  pinMode(EN_PIN, OUTPUT);
-  pinMode(DIR_A_PIN, OUTPUT);
-  pinMode(DIR_B_PIN, OUTPUT);
+  pinMode(ENCA,INPUT);
+  pinMode(ENCB,INPUT);
+  pinMode(PWM,OUTPUT);
+  pinMode(IN1,OUTPUT);
+  pinMode(IN2,OUTPUT);
+  pinMode(STBY,OUTPUT);
 
-  // Estado inicial: detenido
-  stopMotor();
+  digitalWrite(STBY,HIGH);
 
-  Serial.println("Motor Control listo.");
-  Serial.println("Comandos: F <0-255>, R <0-255>, S, ?");
+  attachInterrupt(digitalPinToInterrupt(ENCA),
+                  readEncoder,RISING);
 }
 
 void loop() {
-  handleSerialCommands();
+
+  // read the position and velocity
+  int pos = 0;
+  float velocity2 = 0;
+  noInterrupts(); // disable interrupts temporarily while reading
+  pos = pos_i;
+  velocity2 = velocity_i;
+  interrupts(); // turn interrupts back on
+
+  // Compute velocity with method 1
+  long currT = micros();
+  float deltaT = ((float) (currT-prevT))/1.0e6;
+  float velocity1 = (pos - posPrev)/deltaT;
+  posPrev = pos;
+  prevT = currT;
+
+  // Convert count/s to RPM usando PPR correcto del motor GM25-370
+  float v1 = velocity1/224.4*60.0; // RPM medida (método 1)
+  float v2 = velocity2/224.4*60.0; // RPM medida (método 2)
+
+  // Low-pass filter (25 Hz cutoff) para estabilizar la señal al PID
+  v1Filt = 0.854f*v1Filt + 0.0728f*v1 + 0.0728f*v1Prev;
+  v1Prev = v1;
+  v2Filt = 0.854*v2Filt + 0.0728*v2 + 0.0728*v2Prev;
+  v2Prev = v2;
+
+  // Set a target RPM apropiado para GM25-370 (max 280 RPM sin carga)
+  float vt = 100*(sin(currT/1e6)>0); // oscila entre 0 y 100 RPM
+
+  // Compute the control signal u con PID completo (P + I + D)
+  float kp = 5;
+  float ki = 10;
+  float kd = 0.05;  // Derivada más suave para evitar ruido
+  
+  float e = vt - v1Filt;
+  
+  // Término integral (acumulativo)
+  // Integración con anti-windup (solo cuando salida no saturada fuerte)
+  eintegral += e * deltaT;
+  eintegral = constrain(eintegral, -100.0f, 100.0f);
+  
+  // Término derivativo (cambio del error)
+  // Derivada usando deltaT real para mejor estabilidad
+  float derivada = (e - ek1) / max(deltaT, 1e-3f);
+  
+  // Anti-windup: saturar integral como en medium
+  // (constrain ya aplicado arriba)
+  
+  // PID completo: P + I + D
+  float u = kp * e + ki * eintegral + kd * derivada;
+  
+  // Actualizar error anterior para próxima iteración
+  ek1 = e;
+
+  // Set the motor speed and direction con zona muerta para evitar chatter
+  int dir = 1;
+  const float deadband = 2.0f; // RPM de zona muerta en torno a 0
+  if (u < -deadband) {
+    dir = -1;
+  } else {
+    dir = 1; // evita invertir rápidamente cerca de 0
+  }
+  int pwr = (int) fabs(u);
+  if(pwr > 255){
+    pwr = 255;
+  }
+  // Vencer fricción estática: mínimo PWM cuando se requiere movimiento
+  if (pwr > 0 && pwr < 40) pwr = 40;
+  setMotor(dir,pwr,PWM,IN1,IN2);
+
+  // Serial Plotter: referencia y RPM medida filtrada
+  Serial.print(vt); Serial.print(' ');
+  Serial.println(v1Filt);
+  delay(1);
 }
 
-// --- Funciones de control ---
-void forward(uint8_t speed) {
-  digitalWrite(DIR_A_PIN, HIGH);
-  digitalWrite(DIR_B_PIN, LOW);
-  analogWrite(EN_PIN, speed);
-  currentSpeed = speed;
-  Serial.print("Adelante a "); Serial.println(speed);
-}
-
-void reverse(uint8_t speed) {
-  digitalWrite(DIR_A_PIN, LOW);
-  digitalWrite(DIR_B_PIN, HIGH);
-  analogWrite(EN_PIN, speed);
-  currentSpeed = speed;
-  Serial.print("Reversa a "); Serial.println(speed);
-}
-
-void stopMotor() {
-  analogWrite(EN_PIN, 0);
-  digitalWrite(DIR_A_PIN, LOW);
-  digitalWrite(DIR_B_PIN, LOW);
-  currentSpeed = 0;
-  Serial.println("Motor detenido");
-}
-
-// --- Parsing simple por Serial ---
-void handleSerialCommands() {
-  if (Serial.available() == 0) return;
-
-  char cmd = Serial.read();
-  if (cmd == '\n' || cmd == '\r' || cmd == ' ') return; // Ignorar separadores
-
-  switch (cmd) {
-    case 'F':
-    case 'f': {
-      int val = readIntFromSerial();
-      uint8_t spd = clampPWM(val);
-      forward(spd);
-      break;
-    }
-    case 'R':
-    case 'r': {
-      int val = readIntFromSerial();
-      uint8_t spd = clampPWM(val);
-      reverse(spd);
-      break;
-    }
-    case 'S':
-    case 's': {
-      stopMotor();
-      break;
-    }
-    case '?': {
-      printHelp();
-      break;
-    }
-    default:
-      Serial.print("Comando desconocido: "); Serial.println(cmd);
-      printHelp();
-      break;
+void setMotor(int dir, int pwmVal, int pwm, int in1, int in2){
+  analogWrite(pwm,pwmVal); // Motor speed
+  if(dir == 1){ 
+    // Turn one way
+    digitalWrite(in1,HIGH);
+    digitalWrite(in2,LOW);
+  }
+  else if(dir == -1){
+    // Turn the other way
+    digitalWrite(in1,LOW);
+    digitalWrite(in2,HIGH);
+  }
+  else{
+    // Or dont turn
+    digitalWrite(in1,LOW);
+    digitalWrite(in2,LOW);    
   }
 }
 
-int readIntFromSerial() {
-  // Leer números hasta encontrar no dígito
-  String token = "";
-  unsigned long start = millis();
-  while (millis() - start < 300) { // Timeout simple 300 ms
-    while (Serial.available()) {
-      char c = Serial.peek();
-      if (c == ' ' || c == '\r' || c == '\n') { Serial.read(); if (token.length() > 0) return token.toInt(); else continue; }
-      if (isDigit(c)) { token += (char)Serial.read(); }
-      else { Serial.read(); if (token.length() > 0) return token.toInt(); }
-    }
+void readEncoder(){
+  // Read encoder B when ENCA rises
+  int b = digitalRead(ENCB);
+  int increment = 0;
+  if(b>0){
+    // If B is high, increment forward
+    increment = 1;
   }
-  return token.length() ? token.toInt() : 0;
-}
+  else{
+    // Otherwise, increment backward
+    increment = -1;
+  }
+  pos_i = pos_i + increment;
 
-uint8_t clampPWM(int v) {
-  if (v < 0) v = 0;
-  if (v > 255) v = 255;
-  return (uint8_t)v;
-}
-
-void printHelp() {
-  Serial.println("\nAyuda:");
-  Serial.println(" F <0-255>  -> Adelante a velocidad PWM");
-  Serial.println(" R <0-255>  -> Reversa a velocidad PWM");
-  Serial.println(" S          -> Stop");
-  Serial.println(" ?          -> Mostrar esta ayuda\n");
-  Serial.print("Pines: EN="); Serial.print(EN_PIN);
-  Serial.print(", DIR_A="); Serial.print(DIR_A_PIN);
-  Serial.print(", DIR_B="); Serial.println(DIR_B_PIN);
+  // Compute velocity with method 2
+  long currT = micros();
+  float deltaT = ((float) (currT - prevT_i))/1.0e6;
+  velocity_i = increment/deltaT;
+  prevT_i = currT;
 }
