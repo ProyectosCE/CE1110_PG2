@@ -1,0 +1,171 @@
+% $ biblatex auxiliary file $
+% $ biblatex bbl format version 3.3 $
+% Do not modify the above lines!
+%
+% This is an auxiliary file used by the 'biblatex' package.
+% This file may safely be deleted. It will be recreated as
+% required.
+%
+\begingroup
+\makeatletter
+\@ifundefined{ver@biblatex.sty}
+  {\@latex@error
+     {Missing 'biblatex' package}
+     {The bibliography requires the 'biblatex' package.}
+      \aftergroup\endinput}
+  {}
+\endgroup
+
+\datalist[entry]{none/global//global/global/global}
+  \entry{oppenheim1997signals}{book}{}{}
+    \name{author}{2}{}{%
+      {{hash=OAV}{%
+         family={Oppenheim},
+         familyi={O\bibinitperiod},
+         given={Alan\bibnamedelima V.},
+         giveni={A\bibinitperiod\bibinitdelim V\bibinitperiod},
+      }}%
+      {{hash=WAS}{%
+         family={Willsky},
+         familyi={W\bibinitperiod},
+         given={Alan\bibnamedelima S.},
+         giveni={A\bibinitperiod\bibinitdelim S\bibinitperiod},
+      }}%
+    }
+    \list{publisher}{1}{%
+      {Prentice Hall}%
+    }
+    \strng{namehash}{OAVWAS1}
+    \strng{fullhash}{OAVWAS1}
+    \field{labelnamesource}{author}
+    \field{labeltitlesource}{title}
+    \field{edition}{2}
+    \field{title}{Signals and Systems}
+    \field{year}{1997}
+  \endentry
+
+  \entry{LandauDigitalControl}{book}{}{}
+    \name{author}{2}{}{%
+      {{hash=LID}{%
+         family={Landau},
+         familyi={L\bibinitperiod},
+         given={Ioan\bibnamedelima D.},
+         giveni={I\bibinitperiod\bibinitdelim D\bibinitperiod},
+      }}%
+      {{hash=ZG}{%
+         family={Zito},
+         familyi={Z\bibinitperiod},
+         given={Gianluca},
+         giveni={G\bibinitperiod},
+      }}%
+    }
+    \list{publisher}{1}{%
+      {Springer}%
+    }
+    \strng{namehash}{LIDZG1}
+    \strng{fullhash}{LIDZG1}
+    \field{labelnamesource}{author}
+    \field{labeltitlesource}{title}
+    \field{edition}{2}
+    \field{title}{Digital Control Systems: Design, Identification and
+  Implementation}
+    \list{location}{1}{%
+      {London}%
+    }
+    \field{year}{2006}
+  \endentry
+
+  \entry{OchoaPIDDigital}{thesis}{}{}
+    \name{author}{1}{}{%
+      {{hash=OCDV}{%
+         family={Ochoa\bibnamedelima Correa},
+         familyi={O\bibinitperiod\bibinitdelim C\bibinitperiod},
+         given={Danny\bibnamedelima Vinicio},
+         giveni={D\bibinitperiod\bibinitdelim V\bibinitperiod},
+      }}%
+    }
+    \strng{namehash}{OCDV1}
+    \strng{fullhash}{OCDV1}
+    \field{labelnamesource}{author}
+    \field{labeltitlesource}{title}
+    \field{note}{Repositorio Institucional DSpace UCuenca}
+    \field{title}{Control PID digital: algoritmo, diseño e implementación}
+    \verb{url}
+    \verb https://dspace.ucuenca.edu.ec/items/36f7428d-6802-4858-8448-0d692052b
+    \verb 6d0
+    \endverb
+    \list{location}{1}{%
+      {Cuenca, Ecuador}%
+    }
+    \list{institution}{1}{%
+      {Universidad de Cuenca}%
+    }
+    \field{type}{Trabajo de titulaci{\'o}n}
+    \field{year}{2017}
+  \endentry
+
+  \entry{ArduinoDelay}{online}{}{}
+    \name{author}{1}{}{%
+      {{hash=DA}{%
+         family={Documentation},
+         familyi={D\bibinitperiod},
+         given={Arduino},
+         giveni={A\bibinitperiod},
+      }}%
+    }
+    \strng{namehash}{DA1}
+    \strng{fullhash}{DA1}
+    \field{labelnamesource}{author}
+    \field{labeltitlesource}{title}
+    \field{note}{Accedido el 22 de noviembre de 2025}
+    \field{title}{delay() \textbar{} Arduino Reference}
+    \verb{url}
+    \verb https://docs.arduino.cc/language-reference/en/functions/time/delay/
+    \endverb
+    \field{year}{2025}
+  \endentry
+
+  \entry{ArduinoInterrupts}{online}{}{}
+    \name{author}{1}{}{%
+      {{hash=DA}{%
+         family={Documentation},
+         familyi={D\bibinitperiod},
+         given={Arduino},
+         giveni={A\bibinitperiod},
+      }}%
+    }
+    \strng{namehash}{DA1}
+    \strng{fullhash}{DA1}
+    \field{labelnamesource}{author}
+    \field{labeltitlesource}{title}
+    \field{note}{Accedido el 22 de noviembre de 2025}
+    \field{title}{interrupts() \textbar{} Arduino Reference}
+    \verb{url}
+    \verb https://docs.arduino.cc/language-reference/en/functions/interrupts/in
+    \verb terrupts/
+    \endverb
+    \field{year}{2025}
+  \endentry
+
+  \entry{zaccarian_dc_motors}{report}{}{}
+    \name{author}{1}{}{%
+      {{hash=ZL}{%
+         family={Zaccarian},
+         familyi={Z\bibinitperiod},
+         given={Luca},
+         giveni={L\bibinitperiod},
+      }}%
+    }
+    \strng{namehash}{ZL1}
+    \strng{fullhash}{ZL1}
+    \field{labelnamesource}{author}
+    \field{labeltitlesource}{title}
+    \field{title}{DC motors: dynamic model and control techniques}
+    \list{institution}{1}{%
+      {LAAS-CNRS, Univ. de Toulouse}%
+    }
+    \field{type}{techreport}
+    \field{year}{2013}
+  \endentry
+\enddatalist
+\endinput
