@@ -35,10 +35,10 @@
 #define PIN_SWITCH_PID 11   // Switch PID (HIGH=PID ON, LOW=PID OFF)
 
 // HC-SR04 sensores de distancia
-#define PIN_TRIG_OPEN 4     // HC-SR04 #1 (detener al abrir)
-#define PIN_ECHO_OPEN 9
-#define PIN_TRIG_CLOSE 10   // HC-SR04 #2 (detener al cerrar)  
-#define PIN_ECHO_CLOSE 12
+#define PIN_TRIG_OPEN 9     // HC-SR04 #1 (detener al abrir)
+#define PIN_ECHO_OPEN 10
+#define PIN_TRIG_CLOSE 12   // HC-SR04 #2 (detener al cerrar)  
+#define PIN_ECHO_CLOSE 13
 
 // Especificaciones del encoder del GM25-370
 // Hall resolution: 224.4 PPR
@@ -135,10 +135,19 @@ const unsigned long debounceIntervalMs = 50;
 enum MoveState { IDLE, OPENING, CLOSING };
 MoveState moveState = IDLE;
 
-// Control de tiempo de movimiento (5 segundos por presión)
-unsigned long moveStartTime = 0;
-const unsigned long moveDurationMs = 5000; // 5 segundos
+// Movimiento controlado solo por sensores de distancia (sin temporizador)
 bool motorMoving = false;
+
+// Desaceleración suave al detectar obstáculo
+bool decelerating = false;
+const float STOP_EPS_RPM = 3.0f;      // umbral para considerar velocidad ~0
+const int PWM_DEC_STEP = 10;          // paso de reducción de PWM por ciclo de control en modo manual
+
+// Calibración de distancia de vacío (sin objeto) para cada sensor
+float baselineOpenCm = -1.0f;
+float baselineCloseCm = -1.0f;
+const int BASELINE_SAMPLES = 10;      // muestras para promediar
+const float DETECT_MARGIN_CM = 3.0f;  // margen: si se mide < (baseline - margen) => objeto
 
 // Umbrales de distancia (cm) para parar - AJUSTAR según tu aplicación
 float stopOpenCm = 15.0f;   // si al ABRIR la distancia <= 15 cm, detener
@@ -220,6 +229,36 @@ float measureDistanceCm(uint8_t trigPin, uint8_t echoPin) {
   return (duration * 0.5f) * 0.0343f;
 }
 
+// Promedia múltiples lecturas válidas de un sensor (ignora lecturas inválidas)
+float averageDistanceCm(uint8_t trigPin, uint8_t echoPin, int samples) {
+	float acc = 0.0f;
+	int count = 0;
+	for (int i = 0; i < samples; ++i) {
+		float d = measureDistanceCm(trigPin, echoPin);
+		if (d > 0) { acc += d; count++; }
+		delay(10);
+	}
+	if (count == 0) return -1.0f;
+	return acc / count;
+}
+
+// Calibra las distancias base de "vacío" (sin objeto) para ambos sensores
+void calibrateBaselines() {
+	Serial.println("Calibrando distancias base (sin objeto)...");
+	baselineOpenCm = averageDistanceCm(PIN_TRIG_OPEN, PIN_ECHO_OPEN, BASELINE_SAMPLES);
+	baselineCloseCm = averageDistanceCm(PIN_TRIG_CLOSE, PIN_ECHO_CLOSE, BASELINE_SAMPLES);
+	if (baselineOpenCm > 0) {
+		Serial.print("Baseline OPEN: "); Serial.print(baselineOpenCm); Serial.println(" cm");
+	} else {
+		Serial.println("Baseline OPEN: no válida, usando umbral fijo");
+	}
+	if (baselineCloseCm > 0) {
+		Serial.print("Baseline CLOSE: "); Serial.print(baselineCloseCm); Serial.println(" cm");
+	} else {
+		Serial.println("Baseline CLOSE: no válida, usando umbral fijo");
+	}
+}
+
 // Procesa botones y switch (sin potenciómetro)
 void processSensors() {
   unsigned long now = millis();
@@ -258,18 +297,18 @@ void processSensors() {
   }
 }
 
-// Inicia movimiento por 5 segundos
+// Inicia movimiento (detención controlada por sensores de distancia)
 void startMovement(MoveState direction) {
   moveState = direction;
   motorMoving = true;
-  moveStartTime = millis();
+	decelerating = false; // reiniciar cualquier desaceleración previa
   
   if (direction == OPENING) {
     abrir();
-    Serial.println("Iniciando APERTURA por 5 segundos");
+		Serial.println("Iniciando APERTURA");
   } else if (direction == CLOSING) {
     cerrar();
-    Serial.println("Iniciando CIERRE por 5 segundos");
+		Serial.println("Iniciando CIERRE");
   }
 }
 
@@ -277,24 +316,39 @@ void startMovement(MoveState direction) {
 void stopMovement() {
   motorMoving = false;
   moveState = IDLE;
-  velocidad(0.0f);
+	// Parada: setpoint 0 y PWM manual 0; el lazo pondrá uk=0 cuando motorMoving=false
+	setpointRPM = 0.0f;
+	manualPWM = 0;
+	decelerating = false;
   Serial.println("Movimiento detenido");
 }
 
 // Controla la duración del movimiento
 void processMovementTimer() {
-  if (!motorMoving) return;
-  
-  unsigned long now = millis();
-  
-  // Verificar si han pasado 5 segundos
-  if (now - moveStartTime >= moveDurationMs) {
-    stopMovement();
-    return;
-  }
-  
-  // Verificar límites de distancia solo si el motor está en movimiento
-  processDistanceStop();
+	if (!motorMoving) return;
+
+	// Verificar límites de distancia solo si el motor está en movimiento
+	processDistanceStop();
+
+	// Procesar desaceleración suave (si fue activada por los sensores)
+	// En PID: setpoint a 0 y esperar a que la velocidad caiga por debajo del umbral
+	// En Manual: reducir PWM gradualmente hasta 0
+	if (decelerating) {
+		if (manualMode) {
+			if (manualPWM > 0) {
+				manualPWM = max(0, manualPWM - PWM_DEC_STEP);
+			}
+			// Considerar detenido cuando PWM es 0 y la velocidad medida es baja
+			if (manualPWM == 0 && fabs(v1Filt) <= STOP_EPS_RPM) {
+				stopMovement();
+			}
+		} else {
+			// PID: ya se ha fijado setpointRPM = 0. Esperar a que la velocidad caiga
+			if (fabs(v1Filt) <= STOP_EPS_RPM) {
+				stopMovement();
+			}
+		}
+	}
 }
 
 // Gestiona parada por distancia según el estado actual
@@ -303,17 +357,28 @@ void processDistanceStop() {
   
   if (moveState == OPENING) {
     float dist = measureDistanceCm(PIN_TRIG_OPEN, PIN_ECHO_OPEN);
-    if (dist > 0 && dist <= stopOpenCm) {
-      stopMovement();
-      Serial.println("STOP: Límite de apertura alcanzado");
-    }
+		// Umbral dinámico: si hay baseline válida, usar baseline - margen; si no, usar stopOpenCm
+		float threshold = (baselineOpenCm > 0) ? (baselineOpenCm - DETECT_MARGIN_CM) : stopOpenCm;
+		if (dist > 0 && dist <= threshold) {
+			// Iniciar desaceleración a 0
+			decelerating = true;
+			if (!manualMode) {
+				setpointRPM = 0.0f; // PID decelera con control activo
+			}
+			Serial.println("Desacelerando: Límite de apertura alcanzado");
+		}
   } 
   else if (moveState == CLOSING) {
     float dist = measureDistanceCm(PIN_TRIG_CLOSE, PIN_ECHO_CLOSE);
-    if (dist > 0 && dist <= stopCloseCm) {
-      stopMovement();
-      Serial.println("STOP: Límite de cierre alcanzado");
-    }
+		float threshold = (baselineCloseCm > 0) ? (baselineCloseCm - DETECT_MARGIN_CM) : stopCloseCm;
+		if (dist > 0 && dist <= threshold) {
+			// Iniciar desaceleración a 0
+			decelerating = true;
+			if (!manualMode) {
+				setpointRPM = 0.0f; // PID decelera con control activo
+			}
+			Serial.println("Desacelerando: Límite de cierre alcanzado");
+		}
   }
 }
 
@@ -500,6 +565,9 @@ void parseCommand(char* line){
 
 		// DIRINV -> alterna inversión de pines IN1/IN2
 		if (strncmp(up, "DIRINV", 6) == 0){ invertDirPins = !invertDirPins; return; }
+
+		// CALIBRAR -> recalibra distancias base (sin objeto)
+		if (strncmp(up, "CALIBRAR", 9) == 0){ calibrateBaselines(); return; }
 }
 
 void setup() {
@@ -530,6 +598,9 @@ void setup() {
 	// Inicializar HC-SR04
 	digitalWrite(PIN_TRIG_OPEN, LOW);
 	digitalWrite(PIN_TRIG_CLOSE, LOW);
+
+	// Calibrar baselines de distancia al inicio (sin objeto presente)
+	calibrateBaselines();
 	
 	// Lecturas iniciales para evitar flancos falsos
 	lastBtnAbrir = digitalRead(PIN_BTN_ABRIR);
@@ -753,42 +824,3 @@ void loop() {
 		}
 	}
 }
-
-// ========================= NOTAS DE CONEXIONADO =========================
-/*
-BOTONES (activos en alto):
-- PIN_BTN_ABRIR (A4): Un terminal a +5V, el otro al pin A4 y a GND via resistencia 10kΩ (pull-down)
-- PIN_BTN_CERRAR (A5): Un terminal a +5V, el otro al pin A5 y a GND via resistencia 10kΩ (pull-down)
-
-SWITCH PID (D11):
-- Posición 1 (HIGH): conectar a +5V
-- Posición 2 (LOW): conectar a GND
-- Usar resistencia pull-down 10kΩ si es necesario
-
-HC-SR04 SENSORES:
-Sensor #1 (límite apertura):
-- VCC: +5V
-- GND: GND
-- TRIG: D4 (CAMBIO: era D3 pero conflicto con ENCB)
-- ECHO: D9
-
-Sensor #2 (límite cierre):
-- VCC: +5V
-- GND: GND
-- TRIG: D10
-- ECHO: D12
-
-COMPORTAMIENTO:
-- Motor NO se mueve hasta presionar botón
-- Cada presión dura exactamente 5 segundos
-- Debounce de 50ms en todos los botones
-- HC-SR04 pueden detener el movimiento antes de 5s
-- Switch PID cambia el modo de control
-- La velocidad se define por Serial usando: VEL <rpm> (por ejemplo: VEL 120)
-
-AJUSTAR UMBRALES:
-- stopOpenCm: distancia en cm para detener al abrir (15cm por defecto)
-- stopCloseCm: distancia en cm para detener al cerrar (15cm por defecto)
-- moveDurationMs: duración de cada presión en ms (5000ms = 5s)
-*/
-
