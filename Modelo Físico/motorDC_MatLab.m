@@ -105,7 +105,7 @@ function motorDC_MatLab
     actualizar([], ax1, ax2, []);
 end
 
-%  Funcion actualizar
+%   FUNCIÓN ACTUALIZAR
 function actualizar(src, ax1, ax2, txtHandle)
     f = ancestor(ax1, "figure");
     p = getappdata(f, "params");
@@ -121,6 +121,24 @@ function actualizar(src, ax1, ax2, txtHandle)
     num = [p.km];
     den = [p.L*p.J  (p.R*p.J + p.L*p.B)  (p.R*p.B + p.kb*p.km)];
     G = tf(num, den);
+
+    % Frecuencia recomendada
+    polos = pole(G);
+
+    % Polo dominante (real más cercano a cero)
+    [~, idx] = max(real(polos));
+    p_dom = polos(idx);
+
+    % Constante de tiempo
+    tau = -1 / real(p_dom);
+
+    % Regla 2-10 veces más rápido
+    fs_min = 2/tau;
+    fs_max = 10/tau;
+
+    % Mostrar en GUI
+    txt_fs = findobj(f,'Tag','txt_fs');
+    set(txt_fs, 'String', sprintf('Frecuencia de muestreo: %.1f – %.1f Hz', fs_min, fs_max));
 
     % Respuesta al Escalón
     t = 0:0.001:2;
