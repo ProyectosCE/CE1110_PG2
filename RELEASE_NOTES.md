@@ -25,4 +25,3 @@ This release marks the completion of Proyecto Grupal 2 (Group Project 2) for the
 
 ### Professor
 - Luis Alberto Chavarría Zamora <lachavarria@itcr.ac.cr>
-Release PG2 completed
