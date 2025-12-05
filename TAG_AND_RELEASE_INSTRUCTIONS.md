@@ -3,13 +3,15 @@
 ## Background
 This repository has a git tag `PG2` created locally, but it cannot be pushed directly due to repository rules that restrict tag creation. The following instructions explain how to create the tag and release in GitHub.
 
+**Note:** There is currently a tag `PG2-v1.0-alpha` and release `RV-PG02-v.1` in the repository. This task requires creating a NEW tag and release specifically called `PG2` (not `PG2-v1.0-alpha`).
+
 ## Option 1: Via GitHub UI (Recommended)
 
 1. Navigate to the repository: https://github.com/ProyectosCE/CE1110_PG2
 2. Click on "Releases" (or go to https://github.com/ProyectosCE/CE1110_PG2/releases)
 3. Click "Create a new release"
 4. In "Choose a tag" dropdown, type `PG2` and click "Create new tag: PG2 on publish"
-5. Set "Target" to the branch or commit hash: `4b8cc23` (or `copilot/create-tag-and-release-pg2` branch)
+5. Set "Target" to the branch: `copilot/create-tag-and-release-pg2` (or commit hash: `94cfce2`)
 6. Set "Release title" to: `PG2`
 7. Set "Description" to:
    ```
