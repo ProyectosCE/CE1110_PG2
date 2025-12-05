@@ -9,7 +9,7 @@ kb = 0.02;      % V*s/rad
 km = 0.02;      % Nm/A 
 
 % Función de transferencia: Omega(s)/V(s)
-num = [km];
+num = km;
 den = [L*J (R*J + L*B) (R*B + kb*km)];
 G = tf(num, den);
 
@@ -25,7 +25,7 @@ y_step = cumtrapz(t_imp, h);
 % Convertir de rad/s a RPM
 y_step_rpm = y_step * 60 / (2*pi);
 
-% Gráfica
+% Gráfica respuesta al escalón
 figure;
 plot(t_imp, y_step_rpm, 'LineWidth', 1.5);
 grid on;
@@ -34,10 +34,9 @@ ylabel('Velocidad (RPM)', 'FontSize', 16)
 title('Respuesta al escalón del motor DC', 'FontSize', 18)
 set(gca, 'FontSize', 14)
 
-
 % Mostrar valor final
 omega_max = y_step_rpm(end);
-yline(omega_max, '--r', sprintf('Velocidad de máxima: %.2f RPM', omega_max));
+yline(omega_max, '--r', sprintf('Velocidad máxima: %.2f RPM', omega_max));
 
 % Parámetros dinámicos principales
 info = stepinfo(y_step, t_imp);
@@ -45,3 +44,15 @@ info = stepinfo(y_step, t_imp);
 fprintf("Velocidad máxima: %.2f RPM\n", omega_max);
 fprintf("Tiempo de subida: %.3f s\n", info.RiseTime);
 fprintf("Tiempo de establecimiento: %.3f s\n", info.SettlingTime);
+
+figure;
+pzmap(G);
+grid on;
+title('Diagrama de Polos y Ceros del Motor DC', 'FontSize', 18)
+
+% Ajustar fuentes del eje
+ax = gca;
+ax.XLabel.FontSize = 14;
+ax.YLabel.FontSize = 14;
+ax.Title.FontSize = 18;
+
